@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Graph Algorithm Practice</title>
+  <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+
+  <!-- ── HEADER ─────────────────────────────────────────────── -->
+  <header class="app-header">
+    <div class="header-brand">
+      <svg class="brand-icon" viewBox="0 0 32 32" width="32" height="32">
+        <polygon points="16,2 28,9 28,23 16,30 4,23 4,9" fill="none" stroke="currentColor" stroke-width="1.8"/>
+        <circle cx="16" cy="16" r="3" fill="currentColor"/>
+        <circle cx="16" cy="8"  r="2" fill="currentColor" opacity=".7"/>
+        <circle cx="24" cy="20" r="2" fill="currentColor" opacity=".7"/>
+        <circle cx="8"  cy="20" r="2" fill="currentColor" opacity=".7"/>
+        <line x1="16" y1="10" x2="16" y2="13" stroke="currentColor" stroke-width="1.2"/>
+        <line x1="22" y1="18" x2="19" y2="17" stroke="currentColor" stroke-width="1.2"/>
+        <line x1="10" y1="18" x2="13" y2="17" stroke="currentColor" stroke-width="1.2"/>
+      </svg>
+      <div>
+        <h1>Graph Algorithm Practice</h1>
+        <span class="header-sub">BFS · DFS · UCS · Greedy · A*</span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <div class="goal-btns">
+        <button id="btn-goal-add" class="btn btn-goal-add btn-sm" title="Make a random non-goal node into a goal">+ Goal</button>
+        <button id="btn-goal-remove" class="btn btn-goal-remove btn-sm" title="Remove goal status from a random goal node">− Goal</button>
+      </div>
+      <div class="difficulty-group">
+        <select id="sel-difficulty" class="field-select field-select-sm" title="Graph difficulty">
+          <option value="easy">Easy</option>
+          <option value="normal" selected>Normal</option>
+          <option value="hard">Hard</option>
+        </select>
+        <button id="btn-random" class="btn btn-secondary">
+          <svg viewBox="0 0 24 24" width="15" height="15"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" fill="currentColor"/></svg>
+          Random Graph
+        </button>
+      </div>
+      <button id="btn-clear" class="btn btn-ghost">Clear</button>
+    </div>
+  </header>
+
+  <!-- ── EDITOR VIEW ──────────────────────────────────────────── -->
+  <div class="editor-view" id="editor-view">
+
+    <!-- Graph canvas -->
+    <div class="canvas-wrap">
+      <div class="canvas-toolbar">
+        <div class="mode-buttons">
+          <button id="btn-mode-select" class="mode-btn active" title="Select / Move nodes">
+            <svg viewBox="0 0 24 24" width="16" height="16"><path d="M4 0l16 12-7 2-4 8z" fill="currentColor"/></svg>
+            Select
+          </button>
+          <button id="btn-mode-connect" class="mode-btn" title="Draw edges between nodes">
+            <svg viewBox="0 0 24 24" width="16" height="16"><path d="M4 12h16M16 7l5 5-5 5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+            Connect
+          </button>
+        </div>
+        <button id="btn-fit" class="btn btn-ghost btn-sm" title="Fit all nodes in view (F)">⊡ Fit</button>
+        <span class="canvas-hint" id="canvas-hint">Click empty area to add a node</span>
+      </div>
+      <svg id="editor-svg">
+        <defs>
+          <marker id="arrow-default" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="var(--edge-default)"/>
+          </marker>
+          <marker id="arrow-open" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="var(--node-open)"/>
+          </marker>
+          <marker id="arrow-closed" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="var(--node-closed)"/>
+          </marker>
+          <marker id="arrow-current" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="var(--node-current)"/>
+          </marker>
+          <marker id="arrow-goal" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="var(--node-goal)"/>
+          </marker>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+            <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <g class="zoom-group">
+          <g class="edge-group"></g>
+          <g class="node-group"></g>
+          <line class="temp-edge" id="temp-edge" style="display:none"/>
+        </g>
+      </svg>
+    </div>
+
+    <!-- Controls sidebar -->
+    <aside class="sidebar">
+
+      <div class="sidebar-section">
+        <div class="section-header">Graph</div>
+        <label class="field-label">Start Node</label>
+        <select id="sel-start" class="field-select">
+          <option value="">— select start node —</option>
+        </select>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="section-header">Algorithm</div>
+        <select id="sel-algo" class="field-select">
+          <option value="bfs">BFS — Breadth First Search</option>
+          <option value="dfs">DFS — Depth First Search</option>
+          <option value="dfs-limited">DFS — Depth Limited</option>
+          <option value="iddfs">Iterative Deepening DFS</option>
+          <option value="ucs">Uniform Cost Search</option>
+          <option value="greedy">Greedy Best First</option>
+          <option value="astar">A* Search</option>
+        </select>
+
+        <div id="depth-group" class="field-group" style="display:none; margin-top:10px">
+          <label class="field-label">Depth Limit</label>
+          <input id="inp-depth" type="number" class="field-input" min="0" max="20" value="3">
+        </div>
+
+        <div class="algo-badge" id="algo-badge">
+          <span class="badge-label">Queue</span><span class="badge-val" id="badge-queue-type">FIFO</span>
+          <span class="badge-label">Key</span><span class="badge-val" id="badge-key">—</span>
+          <span class="badge-label">Closed</span><span class="badge-val" id="badge-closed">Yes</span>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <button id="btn-run" class="btn btn-primary btn-full">
+          <svg viewBox="0 0 24 24" width="16" height="16"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+          Run Algorithm
+        </button>
+      </div>
+
+      <!-- Node editor (shown when node is selected) -->
+      <div class="sidebar-section" id="node-editor" style="display:none">
+        <div class="section-header">Edit Node</div>
+        <label class="field-label">Label</label>
+        <input id="edit-node-label" type="text" class="field-input" maxlength="3">
+        <label class="field-label">Heuristic h(n)</label>
+        <input id="edit-node-h" type="number" class="field-input" min="0" step="0.1">
+        <label class="checkbox-wrap">
+          <input id="edit-node-goal" type="checkbox">
+          <span>Goal node</span>
+        </label>
+        <div class="btn-row">
+          <button id="btn-node-update" class="btn btn-secondary btn-sm">Update</button>
+          <button id="btn-node-set-start" class="btn btn-ghost btn-sm">Set Start</button>
+          <button id="btn-node-delete" class="btn btn-danger btn-sm">Delete</button>
+        </div>
+      </div>
+
+      <!-- Edge editor (shown when edge is selected) -->
+      <div class="sidebar-section" id="edge-editor" style="display:none">
+        <div class="section-header">Edit Edge</div>
+        <label class="field-label">Weight</label>
+        <input id="edit-edge-weight" type="number" class="field-input" min="0" step="1">
+        <div class="btn-row">
+          <button id="btn-edge-update" class="btn btn-secondary btn-sm">Update</button>
+          <button id="btn-edge-delete" class="btn btn-danger btn-sm">Delete</button>
+        </div>
+      </div>
+
+    </aside>
+  </div>
+
+  <!-- ── VISUALIZATION PANEL ──────────────────────────────────── -->
+  <div class="viz-panel" id="viz-panel" style="display:none">
+
+    <!-- Playback toolbar -->
+    <div class="viz-toolbar">
+      <button id="btn-back" class="btn btn-ghost btn-sm">← Editor</button>
+      <div class="playback">
+        <button id="btn-prev" class="btn btn-secondary btn-sm" title="Previous step (← arrow key)">&#9664; Prev</button>
+        <button id="btn-play" class="btn btn-play-btn" title="Auto-play through all steps (Space)">&#9654; Play</button>
+        <button id="btn-next" class="btn btn-secondary btn-sm" title="Next step (→ arrow key)">Next &#9654;</button>
+        <div class="speed-ctrl">
+          <span class="speed-lbl">Speed</span>
+          <input id="inp-speed" type="range" class="speed-range" min="200" max="2000" value="800" step="200">
+          <span id="speed-display" class="speed-display">0.8s</span>
+        </div>
+      </div>
+      <span class="step-counter" id="step-counter">Step 0 / 0</span>
+    </div>
+
+    <!-- Step description -->
+    <div class="step-desc-bar" id="step-desc">Ready to visualize.</div>
+
+    <!-- Main viz content -->
+    <div class="viz-content">
+
+      <!-- Graph coloring panel -->
+      <div class="viz-graph-panel">
+        <div class="panel-title-bar">
+          <span class="panel-title">Graph</span>
+          <div class="legend">
+            <span class="legend-dot" style="background:var(--node-unvisited)"></span><span>Unvisited</span>
+            <span class="legend-dot" style="background:var(--node-open)"></span><span>Frontier</span>
+            <span class="legend-dot" style="background:var(--node-current)"></span><span>Current</span>
+            <span class="legend-dot" style="background:var(--node-closed)"></span><span>Developed</span>
+            <span class="legend-dot" style="background:var(--node-goal)"></span><span>Goal Found</span>
+          </div>
+        </div>
+        <svg id="viz-graph-svg">
+          <defs>
+            <marker id="viz-arrow-default" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L8,3 z" fill="var(--edge-default)"/>
+            </marker>
+            <marker id="viz-arrow-open" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L8,3 z" fill="var(--node-open)"/>
+            </marker>
+            <marker id="viz-arrow-closed" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L8,3 z" fill="var(--node-closed)"/>
+            </marker>
+            <marker id="viz-arrow-current" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L8,3 z" fill="var(--node-current)"/>
+            </marker>
+            <marker id="viz-arrow-goal" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L8,3 z" fill="var(--node-goal)"/>
+            </marker>
+          </defs>
+          <g class="viz-edges"></g>
+          <g class="viz-nodes"></g>
+        </svg>
+      </div>
+
+      <!-- Search tree panel -->
+      <div class="tree-panel-wrap">
+        <div class="panel-title-bar">
+          <span class="panel-title">Search Tree</span>
+        </div>
+        <div class="tree-svg-container" id="tree-svg-container">
+          <svg id="tree-svg">
+            <g id="tree-root-g" transform="translate(0,0)">
+              <g class="t-links"></g>
+              <g class="t-nodes"></g>
+            </g>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Queue + Closed panels -->
+      <div class="side-panels">
+        <div class="side-panel">
+          <div class="panel-title-bar">
+            <span class="panel-title">Frontier / Open</span>
+            <span class="panel-badge" id="queue-count">0</span>
+          </div>
+          <div class="item-list" id="queue-list"></div>
+        </div>
+        <div class="side-panel">
+          <div class="panel-title-bar">
+            <span class="panel-title">Developed Nodes</span>
+            <span class="panel-badge" id="closed-count">0</span>
+          </div>
+          <div class="item-list" id="closed-list"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── DIALOGS ───────────────────────────────────────────────── -->
+  <dialog id="dlg-node" class="app-dialog">
+    <div class="dlg-header">
+      <h2 id="dlg-node-title">Add Node</h2>
+    </div>
+    <div class="dlg-body">
+      <label class="field-label">Label <span class="field-hint">(1–3 chars)</span></label>
+      <input id="dlg-node-label" type="text" class="field-input" maxlength="3" placeholder="A" autocomplete="off">
+
+      <label class="field-label" style="margin-top:12px">Heuristic h(n) <span class="field-hint">(estimated distance to goal)</span></label>
+      <input id="dlg-node-h" type="number" class="field-input" min="0" step="0.1" value="0">
+
+      <label class="checkbox-wrap" style="margin-top:12px">
+        <input id="dlg-node-goal" type="checkbox">
+        <span>This is a <strong>goal node</strong></span>
+      </label>
+    </div>
+    <div class="dlg-actions">
+      <button id="dlg-node-cancel" class="btn btn-ghost">Cancel</button>
+      <button id="dlg-node-ok" class="btn btn-primary">Add Node</button>
+    </div>
+  </dialog>
+
+  <dialog id="dlg-edge" class="app-dialog">
+    <div class="dlg-header">
+      <h2>Add Edge</h2>
+    </div>
+    <div class="dlg-body">
+      <label class="field-label" id="dlg-edge-label">Edge weight</label>
+      <input id="dlg-edge-weight" type="number" class="field-input" min="0" step="1" value="1">
+    </div>
+    <div class="dlg-actions">
+      <button id="dlg-edge-cancel" class="btn btn-ghost">Cancel</button>
+      <button id="dlg-edge-ok" class="btn btn-primary">Add Edge</button>
+    </div>
+  </dialog>
+
+  <!-- Context menu -->
+  <div id="ctx-menu" class="ctx-menu" style="display:none">
+    <button class="ctx-item" id="ctx-set-start">Set as Start Node</button>
+    <button class="ctx-item" id="ctx-delete">Delete Node</button>
+  </div>
+
+  <!-- Toast container -->
+  <div id="toasts" class="toast-container"></div>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="src/app.js"></script>
+</body>
+</html>
