@@ -536,26 +536,32 @@ function runUCS(graph) {
   const pq  = new MinHeap(e => e.g);
   const root = makeTreeNode(start, null, 0);
   root.state = 'in-queue';
+  const Q = t => ({ ...qe(t, 'ucs'), isStale: r.closed.has(t.graphNodeId) });
 
   r.snap('init', 'Initialize: priority queue ordered by g (path cost).', root, [], null, null);
   pq.push(root);
   r.snap('push-open', `Push start "${start.label}" (g=0).`,
-    root, pq.toSorted().map(t => qe(t, 'ucs')), root.treeId, null);
+    root, pq.toSorted().map(Q), root.treeId, null);
 
   while (pq.size) {
     const tn = pq.pop();
-    if (r.closed.has(tn.graphNodeId)) continue;  // stale duplicate — skip
+    if (r.closed.has(tn.graphNodeId)) {
+      tn.state = 'stale';
+      r.snap('stale', `Pop "${tn.label}" (g=${tn.g}) — stale duplicate, already developed via better path. Discard.`,
+        root, pq.toSorted().map(Q), tn.treeId, null);
+      continue;
+    }
 
     tn.state = 'current';
     r.snap('pop-open', `Pop "${tn.label}" — lowest g=${tn.g}.`,
-      root, pq.toSorted().map(t => qe(t, 'ucs')), tn.treeId, null);
+      root, pq.toSorted().map(Q), tn.treeId, null);
 
     if (tn.isGoal) {
       tn.state = 'goal';
       const path = getPathToRoot(tn);
       r.snap('goal-found',
         `Goal "${tn.label}" found! Optimal cost g=${tn.g}. Path: ${path.map(n => n.label).join(' → ')}`,
-        root, pq.toSorted().map(t => qe(t, 'ucs')), tn.treeId, path.map(n => n.treeId));
+        root, pq.toSorted().map(Q), tn.treeId, path.map(n => n.treeId));
       return r.steps;
     }
 
@@ -575,7 +581,7 @@ function runUCS(graph) {
     const pushDesc = pushed.length ? pushed.join(', ') : 'none';
     r.snap('expand',
       `Expand "${tn.label}" (g=${tn.g}) → pushed: ${pushDesc}.`,
-      root, pq.toSorted().map(t => qe(t, 'ucs')), tn.treeId, null);
+      root, pq.toSorted().map(Q), tn.treeId, null);
   }
 
   r.snap('no-solution', 'Queue empty — no solution found.', root, [], null, null);
@@ -591,26 +597,32 @@ function runGreedy(graph) {
   const pq  = new MinHeap(e => e.h);
   const root = makeTreeNode(start, null, 0);
   root.state = 'in-queue';
+  const Q = t => ({ ...qe(t, 'greedy'), isStale: r.closed.has(t.graphNodeId) });
 
   r.snap('init', 'Initialize: priority queue ordered by h(n) (heuristic).', root, [], null, null);
   pq.push(root);
   r.snap('push-open', `Push start "${start.label}" (h=${start.h}).`,
-    root, pq.toSorted().map(t => qe(t, 'greedy')), root.treeId, null);
+    root, pq.toSorted().map(Q), root.treeId, null);
 
   while (pq.size) {
     const tn = pq.pop();
-    if (r.closed.has(tn.graphNodeId)) continue;  // stale duplicate — skip
+    if (r.closed.has(tn.graphNodeId)) {
+      tn.state = 'stale';
+      r.snap('stale', `Pop "${tn.label}" (h=${tn.h}) — stale duplicate, already developed via better path. Discard.`,
+        root, pq.toSorted().map(Q), tn.treeId, null);
+      continue;
+    }
 
     tn.state = 'current';
     r.snap('pop-open', `Pop "${tn.label}" with lowest h=${tn.h}.`,
-      root, pq.toSorted().map(t => qe(t, 'greedy')), tn.treeId, null);
+      root, pq.toSorted().map(Q), tn.treeId, null);
 
     if (tn.isGoal) {
       tn.state = 'goal';
       const path = getPathToRoot(tn);
       r.snap('goal-found',
         `Goal "${tn.label}" found! Path: ${path.map(n => n.label).join(' → ')}`,
-        root, pq.toSorted().map(t => qe(t, 'greedy')), tn.treeId, path.map(n => n.treeId));
+        root, pq.toSorted().map(Q), tn.treeId, path.map(n => n.treeId));
       return r.steps;
     }
 
@@ -630,7 +642,7 @@ function runGreedy(graph) {
     const pushDesc = pushed.length ? pushed.join(', ') : 'none';
     r.snap('expand',
       `Expand "${tn.label}" (h=${tn.h}) → pushed: ${pushDesc}.`,
-      root, pq.toSorted().map(t => qe(t, 'greedy')), tn.treeId, null);
+      root, pq.toSorted().map(Q), tn.treeId, null);
   }
 
   r.snap('no-solution', 'Queue empty — no solution found.', root, [], null, null);
@@ -646,28 +658,34 @@ function runAStar(graph) {
   const pq  = new MinHeap(e => e.f);
   const root = makeTreeNode(start, null, 0);
   root.state = 'in-queue';
+  const Q = t => ({ ...qe(t, 'astar'), isStale: r.closed.has(t.graphNodeId) });
 
   r.snap('init', 'Initialize: priority queue ordered by f = g + h.', root, [], null, null);
   pq.push(root);
   r.snap('push-open',
     `Push start "${start.label}" (g=0, h=${start.h}, f=${root.f}).`,
-    root, pq.toSorted().map(t => qe(t, 'astar')), root.treeId, null);
+    root, pq.toSorted().map(Q), root.treeId, null);
 
   while (pq.size) {
     const tn = pq.pop();
-    if (r.closed.has(tn.graphNodeId)) continue;  // stale duplicate — skip
+    if (r.closed.has(tn.graphNodeId)) {
+      tn.state = 'stale';
+      r.snap('stale', `Pop "${tn.label}" (f=${tn.f}) — stale duplicate, already developed via better path. Discard.`,
+        root, pq.toSorted().map(Q), tn.treeId, null);
+      continue;
+    }
 
     tn.state = 'current';
     r.snap('pop-open',
       `Pop "${tn.label}" — lowest f=${tn.f} (g=${tn.g} + h=${tn.h}).`,
-      root, pq.toSorted().map(t => qe(t, 'astar')), tn.treeId, null);
+      root, pq.toSorted().map(Q), tn.treeId, null);
 
     if (tn.isGoal) {
       tn.state = 'goal';
       const path = getPathToRoot(tn);
       r.snap('goal-found',
         `Goal "${tn.label}" found! Optimal cost g=${tn.g}. Path: ${path.map(n => n.label).join(' → ')}`,
-        root, pq.toSorted().map(t => qe(t, 'astar')), tn.treeId, path.map(n => n.treeId));
+        root, pq.toSorted().map(Q), tn.treeId, path.map(n => n.treeId));
       return r.steps;
     }
 
@@ -687,7 +705,7 @@ function runAStar(graph) {
     const pushDesc = pushed.length ? pushed.join(', ') : 'none';
     r.snap('expand',
       `Expand "${tn.label}" (g=${tn.g}, h=${tn.h}, f=${tn.f}) → pushed: ${pushDesc}.`,
-      root, pq.toSorted().map(t => qe(t, 'astar')), tn.treeId, null);
+      root, pq.toSorted().map(Q), tn.treeId, null);
   }
 
   r.snap('no-solution', 'Queue empty — no solution found.', root, [], null, null);
@@ -1585,7 +1603,7 @@ function renderQueue(step) {
   list.innerHTML = '';
   entries.forEach((e, i) => {
     const div = document.createElement('div');
-    div.className = 'queue-item' + (e.isNext ? ' is-next' : '');
+    div.className = 'queue-item' + (e.isNext ? ' is-next' : '') + (e.isStale ? ' is-stale' : '');
 
     const rank  = document.createElement('span');
     rank.className = 'qi-rank';

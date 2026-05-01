@@ -38,6 +38,7 @@
   --node-closed:    #6870a8;
   --node-goal:      #2ed47a;
   --node-pruned:    #e74c4c;
+  --node-stale:     #7a5c9a;  /* muted purple — stale/discarded duplicate */
 
   --edge-default:  #4a5090;
   --edge-solution: #2ed47a;
@@ -93,6 +94,7 @@
   --node-closed:    #5868a8;
   --node-goal:      #177a40;
   --node-pruned:    #b82828;
+  --node-stale:     #8050b8;  /* muted purple — stale/discarded duplicate */
 
   --edge-default:  #6070b0;
   --edge-solution: #177a40;
@@ -663,6 +665,7 @@ body {
 .step-desc-bar.event-goal-found   { border-left: 3px solid var(--node-goal);    color: var(--green); font-weight: 600; }
 .step-desc-bar.event-no-solution  { border-left: 3px solid var(--red);          color: var(--red); }
 .step-desc-bar.event-prune        { border-left: 3px solid var(--node-pruned);  color: var(--red); }
+.step-desc-bar.event-stale        { border-left: 3px solid var(--node-stale);   color: var(--node-stale); }
 
 /* ================================================================
    VIZ CONTENT LAYOUT
@@ -798,6 +801,7 @@ body {
 .t-node-g.tn-expanded  .t-circle-bg { fill: var(--node-closed);    stroke: #8892c8; }
 .t-node-g.tn-goal      .t-circle-bg { fill: var(--node-goal);      stroke: #4ef595; filter: url(#glow); }
 .t-node-g.tn-pruned    .t-circle-bg { fill: var(--node-pruned);    stroke: #f07070; }
+.t-node-g.tn-stale     .t-circle-bg { fill: var(--node-stale);     stroke: #b090d8; opacity: 0.75; }
 .t-node-g.tn-solution  .t-circle-bg { fill: var(--node-goal);      stroke: #4ef595; filter: url(#glow); }
 
 .t-label {
@@ -875,6 +879,22 @@ body {
 
 .queue-item.is-next .qi-label {
   color: var(--node-open);
+}
+
+.queue-item.is-stale {
+  opacity: 0.55;
+  background: rgba(122, 92, 154, 0.12);
+  border-color: rgba(122, 92, 154, 0.35);
+  text-decoration: line-through;
+}
+
+.queue-item.is-stale .qi-label {
+  color: var(--node-stale);
+  text-decoration: line-through;
+}
+
+.queue-item.is-stale .qi-chip {
+  opacity: 0.6;
 }
 
 .qi-rank {
