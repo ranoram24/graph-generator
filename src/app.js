@@ -787,7 +787,7 @@ let connectSourceId = null;
 let selectedNodeId  = null;
 let selectedEdgeId  = null;
 
-const NODE_R = 22;
+const NODE_R = 26;
 
 function initEditor() {
   editorSVG = document.getElementById('editor-svg');
@@ -852,11 +852,11 @@ function initEditor() {
   const h = editorSVG.clientHeight || 500;
 
   simulation = d3.forceSimulation()
-    .force('link',    d3.forceLink().id(d => d.id).distance(160).strength(0.4))
-    .force('charge',  d3.forceManyBody().strength(-900))
+    .force('link',    d3.forceLink().id(d => d.id).distance(290).strength(0.22))
+    .force('charge',  d3.forceManyBody().strength(-2400))
     .force('center',  d3.forceCenter(w / 2, h / 2))
-    .force('collide', d3.forceCollide(NODE_R + 22))
-    .alphaDecay(0.028)
+    .force('collide', d3.forceCollide(NODE_R + 56))
+    .alphaDecay(0.018)
     .on('tick', ticked);
 
   renderGraph();
@@ -908,8 +908,8 @@ function renderEdges(nodeStates) {
     .data(edgesArr, d => d.id)
     .join(enter => {
       const g = enter.append('g').attr('class', 'edge-g');
-      g.append('line').attr('class', 'edge-line');
-      g.append('rect').attr('class', 'edge-weight-bg').attr('width', 24).attr('height', 16).attr('rx', 3).attr('ry', 3);
+      g.append('path').attr('class', 'edge-line');
+      g.append('rect').attr('class', 'edge-weight-bg').attr('width', 30).attr('height', 18).attr('rx', 4).attr('ry', 4);
       g.append('text').attr('class', 'edge-weight-text');
       g.on('click', (event, d) => { event.stopPropagation(); selectEdge(d.id); });
       return g;
@@ -1024,22 +1024,33 @@ function ticked() {
     const dx = tx - sx, dy = ty - sy;
     const len = Math.sqrt(dx*dx + dy*dy) || 1;
     const ux = dx / len, uy = dy / len;
+    const px = -uy, py = ux;   // perpendicular (right-hand side)
 
-    const ex = tx - ux * (NODE_R + 9);
-    const ey = ty - uy * (NODE_R + 9);
+    const hasReverse = edges.some(e => e.source === d.target && e.target === d.source);
 
-    d3.select(this).select('.edge-line')
-      .attr('x1', sx + ux * NODE_R)
-      .attr('y1', sy + uy * NODE_R)
-      .attr('x2', ex)
-      .attr('y2', ey);
+    let pathD, mx, my;
+    if (hasReverse) {
+      const BEND = 38;
+      const ctrlX = (sx + tx) / 2 + px * BEND;
+      const ctrlY = (sy + ty) / 2 + py * BEND;
+      const startX = sx + ux * NODE_R + px * 16;
+      const startY = sy + uy * NODE_R + py * 16;
+      const endX   = tx - ux * (NODE_R + 11) + px * 16;
+      const endY   = ty - uy * (NODE_R + 11) + py * 16;
+      pathD = `M${startX},${startY} Q${ctrlX},${ctrlY} ${endX},${endY}`;
+      mx = 0.25 * startX + 0.5 * ctrlX + 0.25 * endX;
+      my = 0.25 * startY + 0.5 * ctrlY + 0.25 * endY;
+    } else {
+      const endX = tx - ux * (NODE_R + 11);
+      const endY = ty - uy * (NODE_R + 11);
+      pathD = `M${sx + ux * NODE_R},${sy + uy * NODE_R} L${endX},${endY}`;
+      mx = (sx + tx) / 2;
+      my = (sy + ty) / 2;
+    }
 
-    const mx = (sx + tx) / 2;
-    const my = (sy + ty) / 2;
-    d3.select(this).select('.edge-weight-bg')
-      .attr('x', mx - 12).attr('y', my - 9);
-    d3.select(this).select('.edge-weight-text')
-      .attr('x', mx).attr('y', my);
+    d3.select(this).select('.edge-line').attr('d', pathD);
+    d3.select(this).select('.edge-weight-bg').attr('x', mx - 15).attr('y', my - 9);
+    d3.select(this).select('.edge-weight-text').attr('x', mx).attr('y', my);
   });
 }
 
@@ -1234,10 +1245,13 @@ function enterVizMode() {
   document.querySelector('.header-actions').style.display = 'none';
   renderVizGraph(null);
   goToStep(0);
+  setTimeout(fitVizGraph, 40);
 }
 
 function exitVizMode() {
   pausePlayback();
+  treeZoom = null;
+  d3.select('#tree-svg').select('.tree-svg-bg').remove();  // cleaned up on re-enter
   document.getElementById('viz-panel').style.display    = 'none';
   document.getElementById('editor-view').style.display  = '';
   document.querySelector('.header-actions').style.display = '';
@@ -1248,39 +1262,20 @@ function renderVizGraph(nodeStates) {
   if (!vizGraph) return;
   const svgEl  = document.getElementById('viz-graph-svg');
   const svgSel = d3.select(svgEl);
-  const w = svgEl.clientWidth  || 300;
-  const h = svgEl.clientHeight || 300;
 
   const nodes = Array.from(vizGraph.nodes.values());
   const edges = Array.from(vizGraph.edges.values());
   if (!nodes.length) return;
 
-  // Compute bounds to centre the graph
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const n of nodes) {
-    minX = Math.min(minX, n.x); minY = Math.min(minY, n.y);
-    maxX = Math.max(maxX, n.x); maxY = Math.max(maxY, n.y);
-  }
-  const pad = 50;
-  const gw  = maxX - minX || 1;
-  const gh  = maxY - minY || 1;
-  const scale = Math.min((w - pad*2) / gw, (h - pad*2) / gh, 1.5);
-  const offX  = (w - gw * scale) / 2 - minX * scale;
-  const offY  = (h - gh * scale) / 2 - minY * scale;
-
-  const tx = n => n.x * scale + offX;
-  const ty = n => n.y * scale + offY;
-
-  // Build node map for quick lookup
   const nodeMap = new Map(nodes.map(n => [n.id, n]));
 
-  /* edges */
+  /* edges — use raw positions, zoom-group handles scale */
   const edgeSel = svgSel.select('.viz-edges').selectAll('.viz-edge-g')
     .data(edges, d => d.id)
     .join(enter => {
       const g = enter.append('g').attr('class', 'viz-edge-g');
-      g.append('line').attr('class', 'edge-line');
-      g.append('rect').attr('class', 'edge-weight-bg').attr('width', 24).attr('height', 16).attr('rx', 3);
+      g.append('path').attr('class', 'edge-line');
+      g.append('rect').attr('class', 'edge-weight-bg').attr('width', 30).attr('height', 18).attr('rx', 4);
       g.append('text').attr('class', 'edge-weight-text');
       return g;
     });
@@ -1288,23 +1283,39 @@ function renderVizGraph(nodeStates) {
   edgeSel.each(function(d) {
     const s = nodeMap.get(d.source); const t = nodeMap.get(d.target);
     if (!s || !t) return;
-    const sx = tx(s), sy = ty(s), ex = tx(t), ey = ty(t);
-    const dx = ex - sx, dy = ey - sy;
-    const len = Math.sqrt(dx*dx + dy*dy) || 1;
-    const ux = dx/len, uy = dy/len;
-    const vr = NODE_R * scale + 9;
+    const sx = s.x, sy = s.y, tx2 = t.x, ty2 = t.y;
+    const dxx = tx2 - sx, dyy = ty2 - sy;
+    const len = Math.sqrt(dxx*dxx + dyy*dyy) || 1;
+    const ux = dxx/len, uy = dyy/len;
+    const px = -uy, py = ux;
+
     const state = nodeStates ? (nodeStates.get(t.id) || 'unvisited') : 'unvisited';
-    const arrows = { unvisited: '#viz-arrow-default', open: '#viz-arrow-open',
-                     current: '#viz-arrow-current', closed: '#viz-arrow-closed',
-                     goal: '#viz-arrow-goal', pruned: '#viz-arrow-goal' };
-    d3.select(this).select('.edge-line')
-      .attr('x1', sx + ux * NODE_R * scale)
-      .attr('y1', sy + uy * NODE_R * scale)
-      .attr('x2', ex - ux * vr)
-      .attr('y2', ey - uy * vr)
-      .attr('marker-end', `url(${arrows[state] || '#viz-arrow-default'})`);
-    const mx = (sx + ex) / 2, my = (sy + ey) / 2;
-    d3.select(this).select('.edge-weight-bg').attr('x', mx - 12).attr('y', my - 9);
+    const arrowId = { unvisited: 'viz-arrow-default', open: 'viz-arrow-open',
+                      current: 'viz-arrow-current', closed: 'viz-arrow-closed',
+                      goal: 'viz-arrow-goal', pruned: 'viz-arrow-goal' }[state] || 'viz-arrow-default';
+
+    const hasReverse = edges.some(e => e.source === d.target && e.target === d.source);
+    let pathD, mx, my;
+    if (hasReverse) {
+      const BEND = 38;
+      const ctrlX = (sx + tx2) / 2 + px * BEND;
+      const ctrlY = (sy + ty2) / 2 + py * BEND;
+      const startX = sx + ux * NODE_R + px * 16;
+      const startY = sy + uy * NODE_R + py * 16;
+      const endX   = tx2 - ux * (NODE_R + 11) + px * 16;
+      const endY   = ty2 - uy * (NODE_R + 11) + py * 16;
+      pathD = `M${startX},${startY} Q${ctrlX},${ctrlY} ${endX},${endY}`;
+      mx = 0.25 * startX + 0.5 * ctrlX + 0.25 * endX;
+      my = 0.25 * startY + 0.5 * ctrlY + 0.25 * endY;
+    } else {
+      const endX = tx2 - ux * (NODE_R + 11);
+      const endY = ty2 - uy * (NODE_R + 11);
+      pathD = `M${sx + ux * NODE_R},${sy + uy * NODE_R} L${endX},${endY}`;
+      mx = (sx + tx2) / 2;
+      my = (sy + ty2) / 2;
+    }
+    d3.select(this).select('.edge-line').attr('d', pathD).attr('marker-end', `url(#${arrowId})`);
+    d3.select(this).select('.edge-weight-bg').attr('x', mx - 15).attr('y', my - 9);
     d3.select(this).select('.edge-weight-text').attr('x', mx).attr('y', my).text(d.weight);
   });
 
@@ -1313,24 +1324,45 @@ function renderVizGraph(nodeStates) {
     .data(nodes, d => d.id)
     .join(enter => {
       const g = enter.append('g').attr('class', 'viz-node-g');
-      g.append('circle').attr('class', 'goal-ring');
-      g.append('circle').attr('class', 'node-circle');
+      g.append('circle').attr('class', 'goal-ring').attr('r', NODE_R + 8);
+      g.append('circle').attr('class', 'node-circle').attr('r', NODE_R);
       g.append('text').attr('class', 'node-label-text').attr('dy', '-0.15em');
       g.append('text').attr('class', 'node-h-text').attr('dy', '1.15em');
       g.append('text').attr('class', 'node-badge').attr('dy', '-1.9em');
       return g;
     });
 
-  nodeSel.attr('transform', d => `translate(${tx(d)},${ty(d)})`);
+  nodeSel.attr('transform', d => `translate(${d.x ?? 0},${d.y ?? 0})`);
   nodeSel.attr('class', d => {
     const state = nodeStates ? (nodeStates.get(d.id) || 'unvisited') : 'unvisited';
     return 'viz-node-g state-' + state;
   });
-  nodeSel.select('.goal-ring').attr('r', NODE_R * scale + 7).style('display', d => d.isGoal ? '' : 'none');
-  nodeSel.select('.node-circle').attr('r', NODE_R * scale);
-  nodeSel.select('.node-label-text').text(d => d.label).attr('font-size', 12 * scale + 'px');
-  nodeSel.select('.node-h-text').text(d => `h=${d.h}`).attr('font-size', 9 * scale + 'px');
-  nodeSel.select('.node-badge').text(d => d.id === vizGraph.startNodeId ? 'S' : '').attr('font-size', 9 * scale + 'px');
+  nodeSel.select('.goal-ring').style('display', d => d.isGoal ? '' : 'none');
+  nodeSel.select('.node-label-text').text(d => d.label);
+  nodeSel.select('.node-h-text').text(d => `h=${d.h}`);
+  nodeSel.select('.node-badge').text(d => d.id === vizGraph.startNodeId ? 'S' : '');
+}
+
+function fitVizGraph() {
+  const svgEl = document.getElementById('viz-graph-svg');
+  if (!vizGraph) return;
+  const nodes = Array.from(vizGraph.nodes.values()).filter(n => n.x != null);
+  if (!nodes.length) return;
+  const svgW = svgEl.clientWidth  || 300;
+  const svgH = svgEl.clientHeight || 400;
+  const pad  = 54;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const n of nodes) {
+    if (n.x < minX) minX = n.x; if (n.x > maxX) maxX = n.x;
+    if (n.y < minY) minY = n.y; if (n.y > maxY) maxY = n.y;
+  }
+  const gW = maxX - minX || 1;
+  const gH = maxY - minY || 1;
+  const scale = Math.min((svgW - pad * 2) / gW, (svgH - pad * 2) / gH, 1.8);
+  const tx = (svgW - gW * scale) / 2 - minX * scale;
+  const ty = (svgH - gH * scale) / 2 - minY * scale;
+  d3.select(svgEl).select('.viz-zoom-group')
+    .attr('transform', `translate(${tx},${ty}) scale(${scale})`);
 }
 
 /* ── step navigation ─────────────────────────────────────────── */
@@ -1418,28 +1450,41 @@ function renderSearchTree(step) {
   const svgW = container.clientWidth  || 500;
   const svgH = container.clientHeight || 400;
 
-  // Fix SVG to container — no scrollbars, auto-fit instead
   sel.attr('width', svgW).attr('height', svgH)
      .attr('viewBox', `0 0 ${svgW} ${svgH}`);
   container.style.overflow = 'hidden';
 
-  const pad   = 24;
-  const botEx = 40;  // room below last row for value labels
+  // Lazy-init D3 zoom so the user can scroll/drag to explore the tree
+  if (!treeZoom) {
+    sel.insert('rect', ':first-child')
+      .attr('class', 'tree-svg-bg')
+      .attr('width', '100%').attr('height', '100%')
+      .attr('fill', 'transparent');
+    treeZoom = d3.zoom()
+      .scaleExtent([0.05, 8])
+      .on('zoom', event => {
+        d3.select(svgEl).select('#tree-root-g').attr('transform', event.transform);
+      });
+    sel.call(treeZoom);
+  }
+
+  const nodeR = 20;
+  const pad   = nodeR + 28;
+  const botEx = nodeR + 32;
   const treeW = (maxX - minX) || 1;
   const treeH = (maxY - minY) || 1;
 
-  // Scale to fit, allow modest zoom-in for tiny trees, scale down for large ones
   const scale = Math.min(
     (svgW - pad * 2) / treeW,
-    (svgH - pad * 2 - botEx) / treeH,
+    (svgH - pad - botEx) / treeH,
     2.2
   );
 
-  // Center horizontally; pin top with padding
   const tx = svgW / 2 - ((minX + maxX) / 2) * scale;
   const ty = pad - minY * scale;
 
-  gSel.attr('transform', `translate(${tx},${ty}) scale(${scale})`);
+  // Auto-fit: set zoom transform (user can then scroll to explore further)
+  sel.call(treeZoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
 
   const solutionSet = new Set(step.solutionPath || []);
 
@@ -2002,6 +2047,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const ms = 2200 - parseInt(this.value);
     document.getElementById('speed-display').textContent = (ms / 1000).toFixed(1) + 's';
     if (playTimer) { pausePlayback(); startPlayback(); }
+  });
+
+  /* ── Theme toggle ─── */
+  document.getElementById('btn-theme').addEventListener('click', () => {
+    const isLight = document.documentElement.dataset.theme === 'light';
+    document.documentElement.dataset.theme = isLight ? '' : 'light';
+    document.getElementById('btn-theme').textContent = isLight ? '☾' : '☀';
   });
 
   /* ── Generate a random graph on load ─── */

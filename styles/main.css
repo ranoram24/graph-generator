@@ -55,6 +55,54 @@
 }
 
 /* ================================================================
+   LIGHT MODE OVERRIDES
+   ================================================================ */
+[data-theme="light"] {
+  --bg-base:       #eef0fa;
+  --bg-surface:    #ffffff;
+  --bg-card:       #e3e7f5;
+  --bg-elevated:   #d7dcf0;
+  --bg-hover:      #ccd2e8;
+
+  --border:        #bcc4de;
+  --border-light:  #a6b0ce;
+
+  --text:          #1a1c2e;
+  --text-muted:    #485080;
+  --text-dim:      #8088b0;
+
+  --accent:        #2d5ce0;
+  --accent-hover:  #1d4cd0;
+  --accent-glow:   rgba(45,92,224,0.18);
+
+  --purple:        #6820c8;
+  --purple-glow:   rgba(104,32,200,0.18);
+
+  --green:         #177a40;
+  --green-glow:    rgba(23,122,64,0.18);
+
+  --orange:        #b86a00;
+  --orange-glow:   rgba(184,106,0,0.18);
+
+  --red:           #b82828;
+  --red-glow:      rgba(184,40,40,0.18);
+
+  --node-unvisited: #4a5898;
+  --node-open:      #b86a00;
+  --node-current:   #2d5ce0;
+  --node-closed:    #5868a8;
+  --node-goal:      #177a40;
+  --node-pruned:    #b82828;
+
+  --edge-default:  #6070b0;
+  --edge-solution: #177a40;
+
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 20px rgba(0,0,0,0.12);
+  --shadow-lg: 0 8px 40px rgba(0,0,0,0.16);
+}
+
+/* ================================================================
    RESET / BASE
    ================================================================ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -430,7 +478,7 @@ body {
 }
 
 .node-label-text {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
   fill: #fff;
   dominant-baseline: middle;
@@ -440,7 +488,7 @@ body {
 }
 
 .node-h-text {
-  font-size: 9.5px;
+  font-size: 11px;
   fill: var(--text-muted);
   dominant-baseline: auto;
   text-anchor: middle;
@@ -457,14 +505,14 @@ body {
 }
 
 .edge-line {
-  stroke-width: 2;
+  stroke-width: 2.5;
   stroke: var(--edge-default);
   fill: none;
   transition: stroke 0.3s;
 }
 
 .edge-weight-text {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   fill: var(--text-muted);
   dominant-baseline: middle;
@@ -689,6 +737,8 @@ body {
 #viz-graph-svg {
   flex: 1;
   width: 100%;
+  min-height: 0;
+  display: block;
 }
 
 .viz-node-g { pointer-events: none; }

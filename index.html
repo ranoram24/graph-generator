@@ -53,6 +53,7 @@
           Random Graph
         </button>
       </div>
+      <button id="btn-theme" class="btn btn-ghost btn-sm" title="Toggle light / dark mode">☾</button>
       <button id="btn-clear" class="btn btn-ghost">Clear</button>
     </div>
   </header>
@@ -235,8 +236,10 @@
               <path d="M0,0 L0,6 L8,3 z" fill="var(--node-goal)"/>
             </marker>
           </defs>
-          <g class="viz-edges"></g>
-          <g class="viz-nodes"></g>
+          <g class="viz-zoom-group">
+            <g class="viz-edges"></g>
+            <g class="viz-nodes"></g>
+          </g>
         </svg>
       </div>
 
