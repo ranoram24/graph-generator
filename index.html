@@ -31,6 +31,17 @@
         <button id="btn-goal-add" class="btn btn-goal-add btn-sm" title="Make a random non-goal node into a goal">+ Goal</button>
         <button id="btn-goal-remove" class="btn btn-goal-remove btn-sm" title="Remove goal status from a random goal node">− Goal</button>
       </div>
+      <div class="save-load-btns">
+        <button id="btn-save" class="btn btn-ghost btn-sm" title="Save graph to file">
+          <svg viewBox="0 0 24 24" width="13" height="13"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" stroke="currentColor" stroke-width="2" fill="none"/><polyline points="17 21 17 13 7 13 7 21" stroke="currentColor" stroke-width="2" fill="none"/><polyline points="7 3 7 8 15 8" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+          Save
+        </button>
+        <button id="btn-load" class="btn btn-ghost btn-sm" title="Load graph from file">
+          <svg viewBox="0 0 24 24" width="13" height="13"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="2" fill="none"/><polyline points="17 8 12 3 7 8" stroke="currentColor" stroke-width="2" fill="none"/><line x1="12" y1="3" x2="12" y2="15" stroke="currentColor" stroke-width="2"/></svg>
+          Load
+        </button>
+        <input id="inp-load-file" type="file" accept=".json" style="display:none">
+      </div>
       <div class="difficulty-group">
         <select id="sel-difficulty" class="field-select field-select-sm" title="Graph difficulty">
           <option value="easy">Easy</option>

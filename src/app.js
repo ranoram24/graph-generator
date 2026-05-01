@@ -141,13 +141,19 @@ class MinHeap {
   }
 
   toSorted() {
-    return [...this.data].sort((a, b) => this.keyFn(a) - this.keyFn(b));
+    return [...this.data].sort((a, b) => this._cmp(a, b));
+  }
+
+  _cmp(a, b) {
+    const d = this.keyFn(a) - this.keyFn(b);
+    if (d !== 0) return d;
+    return a.label < b.label ? -1 : a.label > b.label ? 1 : 0;
   }
 
   _up(i) {
     while (i > 0) {
       const p = (i - 1) >> 1;
-      if (this.keyFn(this.data[p]) <= this.keyFn(this.data[i])) break;
+      if (this._cmp(this.data[p], this.data[i]) <= 0) break;
       [this.data[p], this.data[i]] = [this.data[i], this.data[p]];
       i = p;
     }
@@ -157,8 +163,8 @@ class MinHeap {
     const n = this.data.length;
     while (true) {
       let s = i, l = 2*i+1, r = 2*i+2;
-      if (l < n && this.keyFn(this.data[l]) < this.keyFn(this.data[s])) s = l;
-      if (r < n && this.keyFn(this.data[r]) < this.keyFn(this.data[s])) s = r;
+      if (l < n && this._cmp(this.data[l], this.data[s]) < 0) s = l;
+      if (r < n && this._cmp(this.data[r], this.data[s]) < 0) s = r;
       if (s === i) break;
       [this.data[s], this.data[i]] = [this.data[i], this.data[s]];
       i = s;
@@ -210,12 +216,19 @@ function runBFS(graph) {
 
   const inOpen = new Set();
   const queue  = [];
-
-  const root = makeTreeNode(start, null, 0);
-  root.state = 'in-queue';
+  const root   = makeTreeNode(start, null, 0);
 
   r.snap('init', 'Initialize: frontier is empty.', root, [], null, null);
 
+  // Early goal test on start node
+  if (start.isGoal) {
+    root.state = 'goal';
+    r.snap('goal-found', `Start "${start.label}" is already a goal! Path: ${start.label}`,
+      root, [], root.treeId, [root.treeId]);
+    return r.steps;
+  }
+
+  root.state = 'in-queue';
   inOpen.add(start.id);
   queue.push(root);
   r.snap('push-open', `Push start "${start.label}" to frontier (depth 0).`,
@@ -229,32 +242,39 @@ function runBFS(graph) {
     r.snap('pop-open', `Pop "${tn.label}" from frontier (depth=${tn.depth}).`,
       root, queue.map(t => qe(t, 'bfs')), tn.treeId, null);
 
-    if (tn.isGoal) {
-      tn.state = 'goal';
-      const path = getPathToRoot(tn);
-      r.snap('goal-found',
-        `Goal "${tn.label}" found! Path: ${path.map(n => n.label).join(' → ')}  (depth=${tn.depth})`,
-        root, queue.map(t => qe(t, 'bfs')), tn.treeId, path.map(n => n.treeId));
-      return r.steps;
-    }
-
     r.closed.add(tn.graphNodeId);
     r.closedList.push(tn.graphNodeId);
     tn.state = 'expanded';
 
-    let added = 0;
-    for (const { node: nb, edge } of graph.getNeighbors(tn.graphNodeId)) {
-      if (!r.closed.has(nb.id) && !inOpen.has(nb.id)) {
-        const child = makeTreeNode(nb, tn, edge.weight);
-        child.state = 'in-queue';
-        tn.children.push(child);
-        queue.push(child);
-        inOpen.add(nb.id);
-        added++;
+    const candidates = graph.getNeighbors(tn.graphNodeId)
+      .filter(({ node: nb }) => !r.closed.has(nb.id) && !inOpen.has(nb.id))
+      .sort((a, b) => a.node.label < b.node.label ? -1 : a.node.label > b.node.label ? 1 : 0);
+
+    // Process children alphabetically: add all to frontier up to (and including) the first goal
+    let firstGoal = null;
+    for (const { node: nb, edge } of candidates) {
+      const child = makeTreeNode(nb, tn, edge.weight);
+      tn.children.push(child);
+      if (nb.isGoal) {
+        child.state = 'goal';
+        firstGoal   = child;
+        break;           // siblings after the goal are not shown
       }
+      child.state = 'in-queue';
+      queue.push(child);
+      inOpen.add(nb.id);
     }
+
+    if (firstGoal) {
+      const path = getPathToRoot(firstGoal);
+      r.snap('goal-found',
+        `Expand "${tn.label}" → Goal "${firstGoal.label}" discovered at depth ${firstGoal.depth}! Path: ${path.map(n => n.label).join(' → ')}`,
+        root, queue.map(t => qe(t, 'bfs')), firstGoal.treeId, path.map(n => n.treeId));
+      return r.steps;
+    }
+
     r.snap('expand',
-      `Expand "${tn.label}" → ${added} new child(ren) added to frontier.`,
+      `Expand "${tn.label}" → ${candidates.length} child(ren) added to frontier.`,
       root, queue.map(t => qe(t, 'bfs')), tn.treeId, null);
   }
 
@@ -270,12 +290,19 @@ function runDFS(graph) {
 
   const inOpen = new Set();
   const stack  = [];
-
-  const root = makeTreeNode(start, null, 0);
-  root.state = 'in-queue';
+  const root   = makeTreeNode(start, null, 0);
 
   r.snap('init', 'Initialize: stack is empty.', root, [], null, null);
 
+  // Early goal test on start node
+  if (start.isGoal) {
+    root.state = 'goal';
+    r.snap('goal-found', `Start "${start.label}" is already a goal! Path: ${start.label}`,
+      root, [], root.treeId, [root.treeId]);
+    return r.steps;
+  }
+
+  root.state = 'in-queue';
   inOpen.add(start.id);
   stack.push(root);
   r.snap('push-open', `Push start "${start.label}" onto stack (depth 0).`,
@@ -289,34 +316,44 @@ function runDFS(graph) {
     r.snap('pop-open', `Pop "${tn.label}" from stack (depth=${tn.depth}).`,
       root, stack.map(t => qe(t, 'dfs')), tn.treeId, null);
 
-    if (tn.isGoal) {
-      tn.state = 'goal';
-      const path = getPathToRoot(tn);
-      r.snap('goal-found',
-        `Goal "${tn.label}" found! Path: ${path.map(n => n.label).join(' → ')}`,
-        root, stack.map(t => qe(t, 'dfs')), tn.treeId, path.map(n => n.treeId));
-      return r.steps;
-    }
-
     r.closed.add(tn.graphNodeId);
     r.closedList.push(tn.graphNodeId);
     tn.state = 'expanded';
 
-    const neighbors = graph.getNeighbors(tn.graphNodeId);
-    let added = 0;
-    for (let i = neighbors.length - 1; i >= 0; i--) {
-      const { node: nb, edge } = neighbors[i];
-      if (!r.closed.has(nb.id) && !inOpen.has(nb.id)) {
-        const child = makeTreeNode(nb, tn, edge.weight);
-        child.state = 'in-queue';
-        tn.children.push(child);
-        stack.push(child);
-        inOpen.add(nb.id);
-        added++;
+    // Process children in alphabetical order for early goal test;
+    // push non-goal children in reverse so the stack pops them alphabetically.
+    const candidates = graph.getNeighbors(tn.graphNodeId)
+      .filter(({ node: nb }) => !r.closed.has(nb.id) && !inOpen.has(nb.id))
+      .sort((a, b) => a.node.label < b.node.label ? -1 : a.node.label > b.node.label ? 1 : 0);
+
+    // Process children alphabetically: add all to stack up to (and including) the first goal
+    let firstGoal = null;
+    const toStack = [];
+    for (const { node: nb, edge } of candidates) {
+      const child = makeTreeNode(nb, tn, edge.weight);
+      tn.children.push(child);
+      if (nb.isGoal) {
+        child.state = 'goal';
+        firstGoal   = child;
+        break;           // siblings after the goal are not shown
       }
+      child.state = 'in-queue';
+      toStack.push(child);
+      inOpen.add(nb.id);
     }
+
+    if (firstGoal) {
+      for (let i = toStack.length - 1; i >= 0; i--) stack.push(toStack[i]);
+      const path = getPathToRoot(firstGoal);
+      r.snap('goal-found',
+        `Expand "${tn.label}" → Goal "${firstGoal.label}" discovered at depth ${firstGoal.depth}! Path: ${path.map(n => n.label).join(' → ')}`,
+        root, stack.map(t => qe(t, 'dfs')), firstGoal.treeId, path.map(n => n.treeId));
+      return r.steps;
+    }
+
+    for (let i = toStack.length - 1; i >= 0; i--) stack.push(toStack[i]);
     r.snap('expand',
-      `Expand "${tn.label}" → ${added} child(ren) pushed onto stack.`,
+      `Expand "${tn.label}" → ${candidates.length} child(ren) pushed onto stack.`,
       root, stack.map(t => qe(t, 'dfs')), tn.treeId, null);
   }
 
@@ -330,27 +367,26 @@ function runDFSLimited(graph, limit) {
   const start = graph.nodes.get(graph.startNodeId);
   if (!start) return [];
 
-  const stack = [];
-  const root  = makeTreeNode(start, null, 0);
-  root.state  = 'in-queue';
+  const root = makeTreeNode(start, null, 0);
 
   r.snap('init', `DFS with depth limit = ${limit}.`, root, [], null, null);
-  stack.push(root);
+
+  // Early goal test on start node
+  if (start.isGoal) {
+    root.state = 'goal';
+    r.snap('goal-found', `Start "${start.label}" is already a goal! Path: ${start.label}`,
+      root, [], root.treeId, [root.treeId]);
+    return r.steps;
+  }
+
+  root.state = 'in-queue';
+  const stack = [root];
 
   while (stack.length) {
     const tn = stack.pop();
     tn.state = 'current';
     r.snap('pop-open', `Pop "${tn.label}" (depth=${tn.depth}).`,
       root, stack.map(t => qe(t, 'dfs-limited')), tn.treeId, null);
-
-    if (tn.isGoal) {
-      tn.state = 'goal';
-      const path = getPathToRoot(tn);
-      r.snap('goal-found',
-        `Goal "${tn.label}" at depth ${tn.depth}. Path: ${path.map(n => n.label).join(' → ')}`,
-        root, stack.map(t => qe(t, 'dfs-limited')), tn.treeId, path.map(n => n.treeId));
-      return r.steps;
-    }
 
     if (tn.depth >= limit) {
       tn.state = 'pruned';
@@ -366,16 +402,37 @@ function runDFSLimited(graph, limit) {
     let anc = tn.parent;
     while (anc) { ancestorIds.add(anc.graphNodeId); anc = anc.parent; }
 
-    const neighbors = graph.getNeighbors(tn.graphNodeId).filter(({ node }) => !ancestorIds.has(node.id));
-    for (let i = neighbors.length - 1; i >= 0; i--) {
-      const { node: nb, edge } = neighbors[i];
+    const candidates = graph.getNeighbors(tn.graphNodeId)
+      .filter(({ node }) => !ancestorIds.has(node.id))
+      .sort((a, b) => a.node.label < b.node.label ? -1 : a.node.label > b.node.label ? 1 : 0);
+
+    // Process children alphabetically up to (and including) the first goal
+    let firstGoal = null;
+    const toStack = [];
+    for (const { node: nb, edge } of candidates) {
       const child = makeTreeNode(nb, tn, edge.weight);
-      child.state = 'in-queue';
       tn.children.push(child);
-      stack.push(child);
+      if (nb.isGoal) {
+        child.state = 'goal';
+        firstGoal   = child;
+        break;
+      }
+      child.state = 'in-queue';
+      toStack.push(child);
     }
+
+    if (firstGoal) {
+      for (let i = toStack.length - 1; i >= 0; i--) stack.push(toStack[i]);
+      const path = getPathToRoot(firstGoal);
+      r.snap('goal-found',
+        `Expand "${tn.label}" → Goal "${firstGoal.label}" discovered at depth ${firstGoal.depth}! Path: ${path.map(n => n.label).join(' → ')}`,
+        root, stack.map(t => qe(t, 'dfs-limited')), firstGoal.treeId, path.map(n => n.treeId));
+      return r.steps;
+    }
+
+    for (let i = toStack.length - 1; i >= 0; i--) stack.push(toStack[i]);
     r.snap('expand',
-      `Expand "${tn.label}" (depth=${tn.depth}) → ${neighbors.length} child(ren).`,
+      `Expand "${tn.label}" (depth=${tn.depth}) → ${candidates.length} child(ren).`,
       root, stack.map(t => qe(t, 'dfs-limited')), tn.treeId, null);
   }
 
@@ -403,21 +460,19 @@ function runIDDFS(graph) {
     const stack = [root];
     let found   = false;
 
-    while (stack.length) {
+    // Early goal test on start for this iteration
+    if (start.isGoal) {
+      root.state = 'goal';
+      r.snap('goal-found', `Start "${start.label}" is the goal! Path: ${start.label}`,
+        root, [], root.treeId, [root.treeId]);
+      found = true;
+    }
+
+    while (!found && stack.length) {
       const tn = stack.pop();
       tn.state = 'current';
       r.snap('pop-open', `Pop "${tn.label}" (depth=${tn.depth}, limit=${limit}).`,
         root, stack.map(t => qe(t, 'iddfs')), tn.treeId, null);
-
-      if (tn.isGoal) {
-        tn.state = 'goal';
-        const path = getPathToRoot(tn);
-        r.snap('goal-found',
-          `Goal "${tn.label}" found at depth ${tn.depth} (limit=${limit}). Path: ${path.map(n => n.label).join(' → ')}`,
-          root, stack.map(t => qe(t, 'iddfs')), tn.treeId, path.map(n => n.treeId));
-        found = true;
-        break;
-      }
 
       if (tn.depth >= limit) {
         tn.state = 'pruned';
@@ -433,16 +488,38 @@ function runIDDFS(graph) {
       let anc = tn.parent;
       while (anc) { ancestorIds.add(anc.graphNodeId); anc = anc.parent; }
 
-      const neighbors = graph.getNeighbors(tn.graphNodeId).filter(({ node }) => !ancestorIds.has(node.id));
-      for (let i = neighbors.length - 1; i >= 0; i--) {
-        const { node: nb, edge } = neighbors[i];
+      const candidates = graph.getNeighbors(tn.graphNodeId)
+        .filter(({ node }) => !ancestorIds.has(node.id))
+        .sort((a, b) => a.node.label < b.node.label ? -1 : a.node.label > b.node.label ? 1 : 0);
+
+      // Process children alphabetically up to (and including) the first goal
+      let firstGoal = null;
+      const toStack = [];
+      for (const { node: nb, edge } of candidates) {
         const child = makeTreeNode(nb, tn, edge.weight);
-        child.state = 'in-queue';
         tn.children.push(child);
-        stack.push(child);
+        if (nb.isGoal) {
+          child.state = 'goal';
+          firstGoal   = child;
+          break;
+        }
+        child.state = 'in-queue';
+        toStack.push(child);
       }
+
+      if (firstGoal) {
+        for (let i = toStack.length - 1; i >= 0; i--) stack.push(toStack[i]);
+        const path = getPathToRoot(firstGoal);
+        r.snap('goal-found',
+          `Expand "${tn.label}" → Goal "${firstGoal.label}" discovered at depth ${firstGoal.depth} (limit=${limit})! Path: ${path.map(n => n.label).join(' → ')}`,
+          root, stack.map(t => qe(t, 'iddfs')), firstGoal.treeId, path.map(n => n.treeId));
+        found = true;
+        break;
+      }
+
+      for (let i = toStack.length - 1; i >= 0; i--) stack.push(toStack[i]);
       r.snap('expand',
-        `Expand "${tn.label}" → ${neighbors.length} child(ren).`,
+        `Expand "${tn.label}" → ${candidates.length} child(ren).`,
         root, stack.map(t => qe(t, 'iddfs')), tn.treeId, null);
     }
 
@@ -457,29 +534,25 @@ function runIDDFS(graph) {
 
 /* ── Uniform Cost Search ─────────────────────────────────────── */
 function runUCS(graph) {
-  const r     = new Runner(graph);
+  const r   = new Runner(graph);
   const start = graph.nodes.get(graph.startNodeId);
   if (!start) return [];
 
-  const pq      = new MinHeap(e => e.g);
-  const openMap = new Map();
-
-  const root   = makeTreeNode(start, null, 0);
-  root.state   = 'in-queue';
+  const pq  = new MinHeap(e => e.g);
+  const root = makeTreeNode(start, null, 0);
+  root.state = 'in-queue';
 
   r.snap('init', 'Initialize: priority queue ordered by g (path cost).', root, [], null, null);
-
   pq.push(root);
-  openMap.set(start.id, root);
   r.snap('push-open', `Push start "${start.label}" (g=0).`,
     root, pq.toSorted().map(t => qe(t, 'ucs')), root.treeId, null);
 
   while (pq.size) {
     const tn = pq.pop();
-    if (r.closed.has(tn.graphNodeId)) continue;
+    if (r.closed.has(tn.graphNodeId)) continue;  // stale duplicate — skip
 
     tn.state = 'current';
-    r.snap('pop-open', `Pop "${tn.label}" with lowest g=${tn.g}.`,
+    r.snap('pop-open', `Pop "${tn.label}" — lowest g=${tn.g}.`,
       root, pq.toSorted().map(t => qe(t, 'ucs')), tn.treeId, null);
 
     if (tn.isGoal) {
@@ -495,21 +568,18 @@ function runUCS(graph) {
     r.closedList.push(tn.graphNodeId);
     tn.state = 'expanded';
 
+    const pushed = [];
     for (const { node: nb, edge } of graph.getNeighbors(tn.graphNodeId)) {
-      if (!r.closed.has(nb.id)) {
-        const newG     = tn.g + edge.weight;
-        const existing = openMap.get(nb.id);
-        if (!existing || newG < existing.g) {
-          const child   = makeTreeNode(nb, tn, edge.weight);
-          child.state   = 'in-queue';
-          tn.children.push(child);
-          pq.push(child);
-          openMap.set(nb.id, child);
-        }
-      }
+      if (r.closed.has(nb.id)) continue;
+      const child = makeTreeNode(nb, tn, edge.weight);
+      child.state = 'in-queue';
+      tn.children.push(child);
+      pq.push(child);
+      pushed.push(`${nb.label}(g=${child.g})`);
     }
+    const pushDesc = pushed.length ? pushed.join(', ') : 'none';
     r.snap('expand',
-      `Expand "${tn.label}" (g=${tn.g}) → neighbors generated.`,
+      `Expand "${tn.label}" (g=${tn.g}) → pushed: ${pushDesc}.`,
       root, pq.toSorted().map(t => qe(t, 'ucs')), tn.treeId, null);
   }
 
@@ -519,26 +589,22 @@ function runUCS(graph) {
 
 /* ── Greedy Best First ───────────────────────────────────────── */
 function runGreedy(graph) {
-  const r     = new Runner(graph);
+  const r   = new Runner(graph);
   const start = graph.nodes.get(graph.startNodeId);
   if (!start) return [];
 
-  const pq     = new MinHeap(e => e.h);
-  const inOpen = new Set();
-
-  const root  = makeTreeNode(start, null, 0);
-  root.state  = 'in-queue';
+  const pq  = new MinHeap(e => e.h);
+  const root = makeTreeNode(start, null, 0);
+  root.state = 'in-queue';
 
   r.snap('init', 'Initialize: priority queue ordered by h(n) (heuristic).', root, [], null, null);
-
   pq.push(root);
-  inOpen.add(start.id);
   r.snap('push-open', `Push start "${start.label}" (h=${start.h}).`,
     root, pq.toSorted().map(t => qe(t, 'greedy')), root.treeId, null);
 
   while (pq.size) {
     const tn = pq.pop();
-    if (r.closed.has(tn.graphNodeId)) continue;
+    if (r.closed.has(tn.graphNodeId)) continue;  // stale duplicate — skip
 
     tn.state = 'current';
     r.snap('pop-open', `Pop "${tn.label}" with lowest h=${tn.h}.`,
@@ -557,17 +623,18 @@ function runGreedy(graph) {
     r.closedList.push(tn.graphNodeId);
     tn.state = 'expanded';
 
+    const pushed = [];
     for (const { node: nb, edge } of graph.getNeighbors(tn.graphNodeId)) {
-      if (!r.closed.has(nb.id) && !inOpen.has(nb.id)) {
-        const child  = makeTreeNode(nb, tn, edge.weight);
-        child.state  = 'in-queue';
-        tn.children.push(child);
-        pq.push(child);
-        inOpen.add(nb.id);
-      }
+      if (r.closed.has(nb.id)) continue;
+      const child = makeTreeNode(nb, tn, edge.weight);
+      child.state = 'in-queue';
+      tn.children.push(child);
+      pq.push(child);
+      pushed.push(`${nb.label}(h=${nb.h})`);
     }
+    const pushDesc = pushed.length ? pushed.join(', ') : 'none';
     r.snap('expand',
-      `Expand "${tn.label}" (h=${tn.h}) → neighbors generated.`,
+      `Expand "${tn.label}" (h=${tn.h}) → pushed: ${pushDesc}.`,
       root, pq.toSorted().map(t => qe(t, 'greedy')), tn.treeId, null);
   }
 
@@ -577,27 +644,23 @@ function runGreedy(graph) {
 
 /* ── A* ──────────────────────────────────────────────────────── */
 function runAStar(graph) {
-  const r     = new Runner(graph);
+  const r   = new Runner(graph);
   const start = graph.nodes.get(graph.startNodeId);
   if (!start) return [];
 
-  const pq      = new MinHeap(e => e.f);
-  const openMap = new Map();
-
-  const root  = makeTreeNode(start, null, 0);
-  root.state  = 'in-queue';
+  const pq  = new MinHeap(e => e.f);
+  const root = makeTreeNode(start, null, 0);
+  root.state = 'in-queue';
 
   r.snap('init', 'Initialize: priority queue ordered by f = g + h.', root, [], null, null);
-
   pq.push(root);
-  openMap.set(start.id, root);
   r.snap('push-open',
     `Push start "${start.label}" (g=0, h=${start.h}, f=${root.f}).`,
     root, pq.toSorted().map(t => qe(t, 'astar')), root.treeId, null);
 
   while (pq.size) {
     const tn = pq.pop();
-    if (r.closed.has(tn.graphNodeId)) continue;
+    if (r.closed.has(tn.graphNodeId)) continue;  // stale duplicate — skip
 
     tn.state = 'current';
     r.snap('pop-open',
@@ -617,21 +680,18 @@ function runAStar(graph) {
     r.closedList.push(tn.graphNodeId);
     tn.state = 'expanded';
 
+    const pushed = [];
     for (const { node: nb, edge } of graph.getNeighbors(tn.graphNodeId)) {
-      if (!r.closed.has(nb.id)) {
-        const newG     = tn.g + edge.weight;
-        const existing = openMap.get(nb.id);
-        if (!existing || newG < existing.g) {
-          const child   = makeTreeNode(nb, tn, edge.weight);
-          child.state   = 'in-queue';
-          tn.children.push(child);
-          pq.push(child);
-          openMap.set(nb.id, child);
-        }
-      }
+      if (r.closed.has(nb.id)) continue;
+      const child = makeTreeNode(nb, tn, edge.weight);
+      child.state = 'in-queue';
+      tn.children.push(child);
+      pq.push(child);
+      pushed.push(`${nb.label}(g=${child.g},f=${child.f})`);
     }
+    const pushDesc = pushed.length ? pushed.join(', ') : 'none';
     r.snap('expand',
-      `Expand "${tn.label}" (g=${tn.g}, h=${tn.h}, f=${tn.f}) → neighbors generated.`,
+      `Expand "${tn.label}" (g=${tn.g}, h=${tn.h}, f=${tn.f}) → pushed: ${pushDesc}.`,
       root, pq.toSorted().map(t => qe(t, 'astar')), tn.treeId, null);
   }
 
@@ -1343,37 +1403,43 @@ function renderSearchTree(step) {
     return;
   }
 
-  const algo = getCurrentAlgo();
-  const root = d3.hierarchy(step.treeRoot, d => d.children.length ? d.children : null);
+  const algo      = getCurrentAlgo();
+  const root      = d3.hierarchy(step.treeRoot, d => d.children.length ? d.children : null);
   treeLayout(root);
 
-  // Get bounds
+  // Compute layout bounds
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   root.each(d => {
     minX = Math.min(minX, d.x); maxX = Math.max(maxX, d.x);
     minY = Math.min(minY, d.y); maxY = Math.max(maxY, d.y);
   });
 
-  const pad    = 60;
-  const padBot = 80;  // extra bottom room for value labels on last row
-  const svgW = svgEl.clientWidth  || 400;
-  const svgH = svgEl.clientHeight || 400;
-  const treeW = maxX - minX + pad * 2;
-  const treeH = maxY - minY + pad + padBot;
-
-  // Translate so tree fits; enable scroll via viewBox
-  const vw = Math.max(svgW, treeW);
-  const vh = Math.max(svgH, treeH);
-  sel.attr('viewBox', `0 0 ${vw} ${vh}`).attr('width', vw).attr('height', vh);
-
   const container = document.getElementById('tree-svg-container');
-  container.style.overflowX = treeW > svgW ? 'auto' : 'hidden';
-  container.style.overflowY = treeH > svgH ? 'auto' : 'hidden';
+  const svgW = container.clientWidth  || 500;
+  const svgH = container.clientHeight || 400;
 
-  const treeWidth = maxX - minX;
-  const ox = (vw - treeWidth) / 2 - minX;
-  const oy = pad;
-  gSel.attr('transform', `translate(${ox},${oy})`);
+  // Fix SVG to container — no scrollbars, auto-fit instead
+  sel.attr('width', svgW).attr('height', svgH)
+     .attr('viewBox', `0 0 ${svgW} ${svgH}`);
+  container.style.overflow = 'hidden';
+
+  const pad   = 24;
+  const botEx = 40;  // room below last row for value labels
+  const treeW = (maxX - minX) || 1;
+  const treeH = (maxY - minY) || 1;
+
+  // Scale to fit, allow modest zoom-in for tiny trees, scale down for large ones
+  const scale = Math.min(
+    (svgW - pad * 2) / treeW,
+    (svgH - pad * 2 - botEx) / treeH,
+    2.2
+  );
+
+  // Center horizontally; pin top with padding
+  const tx = svgW / 2 - ((minX + maxX) / 2) * scale;
+  const ty = pad - minY * scale;
+
+  gSel.attr('transform', `translate(${tx},${ty}) scale(${scale})`);
 
   const solutionSet = new Set(step.solutionPath || []);
 
@@ -1625,6 +1691,78 @@ function showToast(msg, type = 'info') {
   setTimeout(() => { div.style.animation = 'fadeOut 0.3s ease forwards'; setTimeout(() => div.remove(), 300); }, 2800);
 }
 
+function saveGraph() {
+  const data = {
+    version: 1,
+    startNodeId: graphModel.startNodeId,
+    nodes: Array.from(graphModel.nodes.values()).map(n => ({
+      id: n.id, label: n.label, h: n.h, isGoal: n.isGoal, x: n.x ?? 0, y: n.y ?? 0
+    })),
+    edges: Array.from(graphModel.edges.values()).map(e => ({
+      id: e.id, source: e.source, target: e.target, weight: e.weight
+    }))
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'graph.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Graph saved to graph.json', 'success');
+}
+
+function loadGraphFromFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.nodes || !data.edges) throw new Error('Invalid format');
+      const graph = new GraphModel();
+      for (const n of data.nodes) {
+        graph.nodes.set(n.id, { id: n.id, label: n.label, h: n.h ?? 0, isGoal: !!n.isGoal, x: n.x, y: n.y });
+      }
+      for (const ed of data.edges) {
+        graph.edges.set(ed.id, { id: ed.id, source: ed.source, target: ed.target, weight: ed.weight ?? 1 });
+      }
+      graph.startNodeId = data.startNodeId || null;
+      graphModel = graph;
+      clearSelection();
+      cancelConnect();
+      d3.select(editorSVG).select('.edge-group').selectAll('*').remove();
+      d3.select(editorSVG).select('.node-group').selectAll('*').remove();
+      renderGraph();
+      updateStartSelect();
+      updateAlgoBadge();
+      setTimeout(fitToScreen, 600);
+      showToast(`Graph loaded: ${data.nodes.length} nodes, ${data.edges.length} edges.`, 'success');
+    } catch (err) {
+      showToast('Could not load file — make sure it\'s a valid graph JSON.', 'error');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function addGoalNode() {
+  const nonGoals = Array.from(graphModel.nodes.values()).filter(n => !n.isGoal);
+  if (!nonGoals.length) { showToast('All nodes are already goals.', 'warn'); return; }
+  const pick = nonGoals[Math.floor(Math.random() * nonGoals.length)];
+  graphModel.updateNode(pick.id, { isGoal: true, h: 0 });
+  rebuildGraph();
+  showToast(`${pick.label} is now a goal node.`, 'success');
+}
+
+function removeGoalNode() {
+  const goals = Array.from(graphModel.nodes.values()).filter(n => n.isGoal);
+  if (!goals.length) { showToast('No goal nodes to remove.', 'warn'); return; }
+  const pick = goals[Math.floor(Math.random() * goals.length)];
+  graphModel.updateNode(pick.id, { isGoal: false, h: Math.floor(Math.random() * 8) + 2 });
+  rebuildGraph();
+  showToast(`${pick.label} is no longer a goal.`, 'info');
+}
+
 /* ================================================================
    SECTION 12 — APP BOOTSTRAP
    ================================================================ */
@@ -1648,7 +1786,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ── Random graph ─── */
   document.getElementById('btn-random').addEventListener('click', () => {
-    graphModel = generateRandom();
+    const difficulty = document.getElementById('sel-difficulty').value;
+    graphModel = generateRandom(difficulty);
     clearSelection();
     cancelConnect();
     const svgSel = d3.select(editorSVG);
@@ -1657,7 +1796,8 @@ document.addEventListener('DOMContentLoaded', () => {
     renderGraph();
     updateStartSelect();
     updateAlgoBadge();
-    showToast('Random graph generated!', 'success');
+    setTimeout(fitToScreen, 650);
+    showToast(`Random graph generated (${difficulty})!`, 'success');
   });
 
   /* ── Clear ─── */
@@ -1666,8 +1806,32 @@ document.addEventListener('DOMContentLoaded', () => {
     clearSelection();
     d3.select(editorSVG).select('.edge-group').selectAll('*').remove();
     d3.select(editorSVG).select('.node-group').selectAll('*').remove();
+    if (editorZoom) d3.select(editorSVG).call(editorZoom.transform, d3.zoomIdentity);
     updateStartSelect();
     showToast('Graph cleared.', 'info');
+  });
+
+  /* ── Goal node toggle buttons ─── */
+  document.getElementById('btn-goal-add').addEventListener('click', addGoalNode);
+  document.getElementById('btn-goal-remove').addEventListener('click', removeGoalNode);
+
+  /* ── Save / Load ─── */
+  document.getElementById('btn-save').addEventListener('click', saveGraph);
+  document.getElementById('btn-load').addEventListener('click', () => {
+    document.getElementById('inp-load-file').value = '';  // reset so same file can be re-loaded
+    document.getElementById('inp-load-file').click();
+  });
+  document.getElementById('inp-load-file').addEventListener('change', e => {
+    if (e.target.files[0]) loadGraphFromFile(e.target.files[0]);
+  });
+
+  /* ── Fit button + F key ─── */
+  document.getElementById('btn-fit').addEventListener('click', fitToScreen);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'f' || e.key === 'F') {
+      const vizVisible = document.getElementById('viz-panel').style.display !== 'none';
+      if (!vizVisible && document.activeElement.tagName === 'BODY') fitToScreen();
+    }
   });
 
   /* ── Add node dialog ─── */
@@ -1841,8 +2005,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /* ── Generate a random graph on load ─── */
-  graphModel = generateRandom();
+  graphModel = generateRandom('normal');
   renderGraph();
   updateStartSelect();
   updateAlgoBadge();
+  setTimeout(fitToScreen, 700);
 });

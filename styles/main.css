@@ -213,6 +213,11 @@ body {
   gap: 4px;
 }
 
+.save-load-btns {
+  display: flex;
+  gap: 4px;
+}
+
 .difficulty-group {
   display: flex;
   align-items: center;
@@ -694,15 +699,15 @@ body {
    ================================================================ */
 .tree-svg-container {
   flex: 1;
-  overflow: auto;
+  overflow: hidden;
   position: relative;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
+  min-height: 0;
 }
 
 #tree-svg {
   display: block;
+  width: 100%;
+  height: 100%;
 }
 
 /* Tree links */
