@@ -489,7 +489,7 @@ body {
 
 .node-h-text {
   font-size: 11px;
-  fill: var(--text-muted);
+  fill: rgba(255, 255, 255, 0.72);
   dominant-baseline: auto;
   text-anchor: middle;
   pointer-events: none;

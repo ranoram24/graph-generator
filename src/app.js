@@ -288,10 +288,7 @@ function runDFS(graph) {
   const start = graph.nodes.get(graph.startNodeId);
   if (!start) return [];
 
-  const inOpen = new Set();
-  const stack  = [];
-  const root   = makeTreeNode(start, null, 0);
-
+  const root = makeTreeNode(start, null, 0);
   r.snap('init', 'Initialize: stack is empty.', root, [], null, null);
 
   // Early goal test on start node
@@ -303,30 +300,29 @@ function runDFS(graph) {
   }
 
   root.state = 'in-queue';
-  inOpen.add(start.id);
-  stack.push(root);
+  const stack = [root];
   r.snap('push-open', `Push start "${start.label}" onto stack (depth 0).`,
     root, stack.map(t => qe(t, 'dfs')), root.treeId, null);
 
   while (stack.length) {
     const tn = stack.pop();
-    if (r.closed.has(tn.graphNodeId)) continue;
-
     tn.state = 'current';
     r.snap('pop-open', `Pop "${tn.label}" from stack (depth=${tn.depth}).`,
       root, stack.map(t => qe(t, 'dfs')), tn.treeId, null);
 
-    r.closed.add(tn.graphNodeId);
-    r.closedList.push(tn.graphNodeId);
     tn.state = 'expanded';
+    r.closedList.push(tn.graphNodeId);
 
-    // Process children in alphabetical order for early goal test;
-    // push non-goal children in reverse so the stack pops them alphabetically.
+    // Path-based cycle check: only skip nodes already on the path from root to tn
+    // (no global visited set — matches the recursive pseudocode)
+    const ancestorIds = new Set();
+    let anc = tn.parent;
+    while (anc) { ancestorIds.add(anc.graphNodeId); anc = anc.parent; }
+
     const candidates = graph.getNeighbors(tn.graphNodeId)
-      .filter(({ node: nb }) => !r.closed.has(nb.id) && !inOpen.has(nb.id))
+      .filter(({ node: nb }) => !ancestorIds.has(nb.id))
       .sort((a, b) => a.node.label < b.node.label ? -1 : a.node.label > b.node.label ? 1 : 0);
 
-    // Process children alphabetically: add all to stack up to (and including) the first goal
     let firstGoal = null;
     const toStack = [];
     for (const { node: nb, edge } of candidates) {
@@ -335,11 +331,10 @@ function runDFS(graph) {
       if (nb.isGoal) {
         child.state = 'goal';
         firstGoal   = child;
-        break;           // siblings after the goal are not shown
+        break;
       }
       child.state = 'in-queue';
       toStack.push(child);
-      inOpen.add(nb.id);
     }
 
     if (firstGoal) {
