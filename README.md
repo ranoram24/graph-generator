@@ -41,19 +41,7 @@ No local Node.js dependencies are used.
 
 ## Running Locally
 
-You can open `index.html` directly in a browser.
-
-For a more browser-like local environment, serve the folder with any static file server:
-
-```powershell
-python -m http.server 8000
-```
-
-Then open:
-
-```text
-http://localhost:8000
-```
+Just download and run `index.html`.
 
 ## Basic Usage
 
